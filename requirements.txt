@@ -1,0 +1,4 @@
+py-cord==2.6.1
+requests
+python-dotenv
+validators
