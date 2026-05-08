@@ -1,4 +1,28 @@
 import os
+                embed.add_field(
+                    name="Quantity",
+                    value=str(QUANTITY),
+                    inline=False
+                )
+
+                embed.add_field(
+                    name="API Response",
+                    value=f"```{data}```",
+                    inline=False
+                )
+
+                await log_channel.send(embed=embed)
+
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Failed to place order.\n```{e}```",
+                ephemeral=True
+            )
+
+
+class TicketView(View):
+    def __init__(self):
+        super().__init__(timeout=None)
 
     @discord.ui.button(
         label="Kalu",
@@ -8,10 +32,6 @@ import os
     async def kalu_button(self, button, interaction):
         await interaction.response.send_modal(OrderModal())
 
-
-# =========================
-# EVENTS
-# =========================
 
 @bot.event
 async def on_ready():
@@ -23,10 +43,6 @@ async def on_ready():
     except Exception as e:
         print(e)
 
-
-# =========================
-# COMMANDS
-# =========================
 
 @bot.slash_command(name="jstock", description="Shows stock")
 async def jstock(ctx):
