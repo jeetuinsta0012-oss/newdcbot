@@ -341,9 +341,9 @@ class TicketView(View):
         super().__init__(timeout=None)
 
     @discord.ui.button(
-        label="Kalu",
+        label="Get Views",
         style=discord.ButtonStyle.primary,
-        emoji="📩"
+        emoji="✅"
     )
     async def kalu_button(self, button, interaction):
 
@@ -402,13 +402,13 @@ async def jsetup(ctx):
         return
 
     embed = discord.Embed(
-        title="Lalu",
-        description="Click the button below to continue.",
+        title="TikTok Views Tool",
+        description="Click the button below to get free TikTok Views",
         color=discord.Color.green()
     )
 
     embed.set_footer(
-        text="Powered by Lalu System"
+        text="Powered by CodeNest System"
     )
 
     await ctx.channel.send(
