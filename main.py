@@ -36,7 +36,7 @@ SERVICES = {
         "service_id": 3154,
         "quantity": 500,
         "keys_file": "kaddu1_keys.txt",
-        "button_label": "Kaddu1",
+        "button_label": "Get Likes",
         "button_style": discord.ButtonStyle.success
     },
 
@@ -44,7 +44,7 @@ SERVICES = {
         "service_id": 3976,
         "quantity": 100,
         "keys_file": "kaddu2_keys.txt",
-        "button_label": "Kaddu2",
+        "button_label": "Get Followers",
         "button_style": discord.ButtonStyle.danger
     }
 }
@@ -364,7 +364,7 @@ async def jsetup(ctx):
 
     embed = discord.Embed(
         title="TikTok Views Tool",
-        description="Click the buttons below to get TikTok Views",
+        description="Click the buttons below to get TikTok Services",
         color=discord.Color.green()
     )
 
