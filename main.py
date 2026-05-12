@@ -435,8 +435,8 @@ async def jsetup(ctx):
         )
 
     embed = discord.Embed(
-        title="TikTok Views Tool",
-        description="Click the buttons below to get TikTok Views",
+        title="TikTok Services Bot",
+        description="Click the buttons below to get services",
         color=discord.Color.green()
     )
 
