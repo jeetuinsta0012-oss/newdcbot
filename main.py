@@ -323,7 +323,7 @@ class TicketView(discord.ui.View):
         )
 
     @discord.ui.button(
-        label="Kaddu1",
+        label="TikTok Likes",
         style=discord.ButtonStyle.success,
         custom_id="kaddu1_button"
     )
@@ -333,7 +333,7 @@ class TicketView(discord.ui.View):
         )
 
     @discord.ui.button(
-        label="Kaddu2",
+        label="TikTok Followers",
         style=discord.ButtonStyle.danger,
         custom_id="kaddu2_button"
     )
