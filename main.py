@@ -4,11 +4,13 @@ import time
 import requests
 import validators
 import discord
+
 from discord.ext import commands
-from discord.ui import View, Modal, InputText
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# ================= ENV =================
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 SMM_API_KEY = os.getenv("SMM_API_KEY")
@@ -16,308 +18,281 @@ OWNER_ID = int(os.getenv("OWNER_ID"))
 LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID"))
 
 API_URL = "https://cheapestsmmpanels.com/api/v2"
-SERVICE_ID = 3080
-QUANTITY = 100
 
-COOLDOWN_SECONDS = 1800  # 30 mins
+# ================= CONFIG =================
+
+COOLDOWN_SECONDS = 1800
+
+SERVICES = {
+    "views": {
+        "service_id": 3080,
+        "quantity": 100,
+        "keys_file": "keys.txt",
+        "button_label": "Get Views",
+        "button_style": discord.ButtonStyle.primary
+    },
+
+    "kaddu1": {
+        "service_id": 3154,
+        "quantity": 500,
+        "keys_file": "kaddu1_keys.txt",
+        "button_label": "Kaddu1",
+        "button_style": discord.ButtonStyle.success
+    },
+
+    "kaddu2": {
+        "service_id": 3976,
+        "quantity": 100,
+        "keys_file": "kaddu2_keys.txt",
+        "button_label": "Kaddu2",
+        "button_style": discord.ButtonStyle.danger
+    }
+}
 
 SETTINGS_FILE = "settings.json"
 COOLDOWN_FILE = "cooldowns.json"
 
+# ================= BOT =================
+
 intents = discord.Intents.default()
 
-bot = commands.Bot(intents=intents)
+bot = commands.Bot(
+    command_prefix="!",
+    intents=intents
+)
 
-
-# =========================
-# SETTINGS
-# =========================
+# ================= SETTINGS =================
 
 def load_settings():
-
     if not os.path.exists(SETTINGS_FILE):
-
         default = {
             "keys_enabled": True
         }
 
         with open(SETTINGS_FILE, "w") as f:
-            json.dump(default, f)
+            json.dump(default, f, indent=4)
 
         return default
 
     with open(SETTINGS_FILE, "r") as f:
         return json.load(f)
 
+settings = load_settings()
 
-def save_settings(data):
-
-    with open(SETTINGS_FILE, "w") as f:
-        json.dump(data, f, indent=4)
-
-
-# =========================
-# COOLDOWNS
-# =========================
+# ================= COOLDOWNS =================
 
 def load_cooldowns():
-
     if not os.path.exists(COOLDOWN_FILE):
-
         with open(COOLDOWN_FILE, "w") as f:
             json.dump({}, f)
-
-        return {}
 
     with open(COOLDOWN_FILE, "r") as f:
         return json.load(f)
 
+cooldowns = load_cooldowns()
 
-def save_cooldowns(data):
-
+def save_cooldowns():
     with open(COOLDOWN_FILE, "w") as f:
-        json.dump(data, f, indent=4)
-
+        json.dump(cooldowns, f, indent=4)
 
 def check_cooldown(user_id):
-
-    cooldowns = load_cooldowns()
-
-    user_id = str(user_id)
+    now = int(time.time())
 
     if user_id not in cooldowns:
         return 0
 
-    last_used = cooldowns[user_id]
+    expire_time = cooldowns[user_id] + COOLDOWN_SECONDS
 
-    remaining = COOLDOWN_SECONDS - (time.time() - last_used)
-
-    if remaining <= 0:
+    if now >= expire_time:
         return 0
 
-    return int(remaining)
-
+    return expire_time - now
 
 def update_cooldown(user_id):
+    cooldowns[user_id] = int(time.time())
+    save_cooldowns()
 
-    cooldowns = load_cooldowns()
+# ================= KEYS =================
 
-    cooldowns[str(user_id)] = time.time()
+def load_keys(file_name):
+    if not os.path.exists(file_name):
+        open(file_name, "w").close()
 
-    save_cooldowns(cooldowns)
-
-
-# =========================
-# KEY SYSTEM
-# =========================
-
-def load_keys():
-
-    if not os.path.exists("keys.txt"):
-        return []
-
-    with open("keys.txt", "r") as f:
+    with open(file_name, "r") as f:
         return [line.strip() for line in f.readlines() if line.strip()]
 
+def remove_key(file_name, used_key):
+    keys = load_keys(file_name)
 
-def remove_key(key):
+    with open(file_name, "w") as f:
+        for key in keys:
+            if key != used_key:
+                f.write(key + "\n")
 
-    keys = load_keys()
+# ================= MODAL =================
 
-    if key in keys:
+class OrderModal(discord.ui.Modal):
 
-        keys.remove(key)
+    def __init__(self, service_type):
 
-        with open("keys.txt", "w") as f:
+        self.service_type = service_type
+        self.service_data = SERVICES[service_type]
 
-            for k in keys:
-                f.write(k + "\n")
+        super().__init__(
+            title=f"{self.service_data['button_label']} Order"
+        )
 
-
-# =========================
-# MODAL
-# =========================
-
-class OrderModal(Modal):
-
-    def __init__(self):
-
-        super().__init__(title="Kalu")
-
-        settings = load_settings()
-
-        self.video_link = InputText(
-            label="Video Link",
-            placeholder="https://example.com/video",
+        self.link = discord.ui.InputText(
+            label="TikTok Video Link",
+            placeholder="https://www.tiktok.com/...",
             required=True
         )
 
-        self.amount = InputText(
-            label="Amount",
-            value="100",
-            required=True
+        self.key = discord.ui.InputText(
+            label="Key",
+            placeholder="Enter your key",
+            required=True,
+            min_length=5,
+            max_length=100
         )
 
-        self.add_item(self.video_link)
-        self.add_item(self.amount)
-
-        if settings["keys_enabled"]:
-
-            self.key_input = InputText(
-                label="Key",
-                placeholder="Enter your 5-character key",
-                required=True,
-                min_length=5,
-                max_length=5
-            )
-
-            self.add_item(self.key_input)
+        self.add_item(self.link)
+        self.add_item(self.key)
 
     async def callback(self, interaction: discord.Interaction):
 
-        user_id = interaction.user.id
-
-        # =========================
-        # COOLDOWN CHECK
-        # =========================
+        user_id = str(interaction.user.id)
 
         remaining = check_cooldown(user_id)
 
         if remaining > 0:
+            mins = remaining // 60
+            secs = remaining % 60
 
-            minutes = remaining // 60
-            seconds = remaining % 60
-
-            await interaction.response.send_message(
-                f"❌ Cooldown active.\nTry again in {minutes}m {seconds}s.",
+            return await interaction.response.send_message(
+                f"⏳ Cooldown active.\nTry again in {mins}m {secs}s",
                 ephemeral=True
             )
 
-            return
+        link = self.link.value.strip()
+        user_key = self.key.value.strip()
 
-        settings = load_settings()
-
-        link = self.video_link.value.strip()
-        amount = self.amount.value.strip()
-
-        # =========================
-        # URL VALIDATION
-        # =========================
+        # ================= URL VALIDATION =================
 
         if not validators.url(link):
-
-            await interaction.response.send_message(
-                "❌ Invalid video link.",
+            return await interaction.response.send_message(
+                "❌ Invalid URL",
                 ephemeral=True
             )
 
-            return
-
-        # =========================
-        # AMOUNT VALIDATION
-        # =========================
-
-        if amount != "100":
-
-            await interaction.response.send_message(
-                "❌ Amount must be 100.",
+        if "tiktok.com" not in link.lower():
+            return await interaction.response.send_message(
+                "❌ Only TikTok links are allowed",
                 ephemeral=True
             )
 
-            return
+        # ================= KEY VALIDATION =================
 
-        # =========================
-        # KEY VALIDATION
-        # =========================
+        keys_file = self.service_data["keys_file"]
 
-        if settings["keys_enabled"]:
+        valid_keys = load_keys(keys_file)
 
-            user_key = self.key_input.value.strip()
+        if user_key not in valid_keys:
+            return await interaction.response.send_message(
+                "❌ Invalid key for this service",
+                ephemeral=True
+            )
 
-            valid_keys = load_keys()
+        # ================= API REQUEST =================
 
-            if user_key not in valid_keys:
-
-                await interaction.response.send_message(
-                    "❌ Key is invalid or expired.",
-                    ephemeral=True
-                )
-
-                return
-
-            remove_key(user_key)
-
-        # =========================
-        # API ORDER
-        # =========================
+        payload = {
+            "key": SMM_API_KEY,
+            "action": "add",
+            "service": self.service_data["service_id"],
+            "link": link,
+            "quantity": self.service_data["quantity"]
+        }
 
         try:
-
-            payload = {
-                "key": SMM_API_KEY,
-                "action": "add",
-                "service": SERVICE_ID,
-                "link": link,
-                "quantity": QUANTITY
-            }
 
             response = requests.post(
                 API_URL,
                 data=payload,
-                timeout=30
+                timeout=20
             )
 
             data = response.json()
 
-            # Update cooldown
+            # ================= API VALIDATION =================
+
+            if "order" not in data:
+                return await interaction.response.send_message(
+                    f"❌ API Error\n```{data}```",
+                    ephemeral=True
+                )
+
+            # ================= REMOVE KEY =================
+
+            remove_key(keys_file, user_key)
+
+            # ================= UPDATE COOLDOWN =================
+
             update_cooldown(user_id)
 
-            # Success message
+            # ================= SUCCESS MESSAGE =================
+
             await interaction.response.send_message(
-                f"✅ Order placed successfully.\nAPI Response: `{data}`",
+                f"✅ Order placed successfully!\n\n"
+                f"📦 Service: {self.service_type}\n"
+                f"🔢 Quantity: {self.service_data['quantity']}\n"
+                f"🆔 Order ID: {data['order']}",
                 ephemeral=True
             )
 
-            # =========================
-            # LOGS
-            # =========================
+            # ================= LOGS =================
 
             log_channel = bot.get_channel(LOG_CHANNEL_ID)
 
             if log_channel:
 
                 embed = discord.Embed(
-                    title="New Order Placed",
+                    title="📦 New Order",
                     color=discord.Color.green()
                 )
 
                 embed.add_field(
                     name="User",
-                    value=f"{interaction.user} ({interaction.user.id})",
+                    value=interaction.user.mention,
                     inline=False
                 )
 
                 embed.add_field(
-                    name="Video Link",
+                    name="Button",
+                    value=self.service_type,
+                    inline=True
+                )
+
+                embed.add_field(
+                    name="Quantity",
+                    value=str(self.service_data["quantity"]),
+                    inline=True
+                )
+
+                embed.add_field(
+                    name="Service ID",
+                    value=str(self.service_data["service_id"]),
+                    inline=True
+                )
+
+                embed.add_field(
+                    name="Link",
                     value=link,
                     inline=False
                 )
 
                 embed.add_field(
-                    name="Quantity",
-                    value=str(QUANTITY),
-                    inline=False
-                )
-
-                embed.add_field(
-                    name="Keys Required",
-                    value=str(settings["keys_enabled"]),
-                    inline=False
-                )
-
-                embed.add_field(
-                    name="API Response",
-                    value=f"```{data}```",
+                    name="Order ID",
+                    value=str(data["order"]),
                     inline=False
                 )
 
@@ -326,16 +301,13 @@ class OrderModal(Modal):
         except Exception as e:
 
             await interaction.response.send_message(
-                f"❌ Failed to place order.\n```{e}```",
+                f"❌ Error:\n```{e}```",
                 ephemeral=True
             )
 
+# ================= BUTTON VIEW =================
 
-# =========================
-# BUTTON VIEW
-# =========================
-
-class TicketView(View):
+class TicketView(discord.ui.View):
 
     def __init__(self):
         super().__init__(timeout=None)
@@ -343,67 +315,56 @@ class TicketView(View):
     @discord.ui.button(
         label="Get Views",
         style=discord.ButtonStyle.primary,
-        emoji="✅"
+        custom_id="views_button"
     )
-    async def kalu_button(self, button, interaction):
-
+    async def views_button(self, button, interaction):
         await interaction.response.send_modal(
-            OrderModal()
+            OrderModal("views")
         )
 
+    @discord.ui.button(
+        label="Kaddu1",
+        style=discord.ButtonStyle.success,
+        custom_id="kaddu1_button"
+    )
+    async def kaddu1_button(self, button, interaction):
+        await interaction.response.send_modal(
+            OrderModal("kaddu1")
+        )
 
-# =========================
-# EVENTS
-# =========================
+    @discord.ui.button(
+        label="Kaddu2",
+        style=discord.ButtonStyle.danger,
+        custom_id="kaddu2_button"
+    )
+    async def kaddu2_button(self, button, interaction):
+        await interaction.response.send_modal(
+            OrderModal("kaddu2")
+        )
+
+# ================= EVENTS =================
 
 @bot.event
 async def on_ready():
 
+    bot.add_view(TicketView())
+
     print(f"Logged in as {bot.user}")
 
-    try:
+# ================= COMMANDS =================
 
-        synced = await bot.sync_commands()
-
-        print(f"Synced {len(synced)} commands")
-
-    except Exception as e:
-        print(e)
-
-
-# =========================
-# COMMANDS
-# =========================
-
-@bot.slash_command(
-    name="jstock",
-    description="Shows stock"
-)
-async def jstock(ctx):
-
-    await ctx.respond(
-        "💰 860k Credits"
-    )
-
-
-@bot.slash_command(
-    name="jsetup",
-    description="Setup panel"
-)
+@bot.slash_command(name="jsetup")
 async def jsetup(ctx):
 
     if ctx.author.id != OWNER_ID:
-
-        await ctx.respond(
-            "❌ Only owner can use this command.",
+        return await ctx.respond(
+            "❌ Owner only command",
             ephemeral=True
         )
 
-        return
-
     embed = discord.Embed(
         title="TikTok Views Tool",
-        description="Click the button below to get free TikTok Views",
+        description="Click the buttons below to get TikTok Views",
         color=discord.Color.green()
     )
 
@@ -411,63 +372,18 @@ async def jsetup(ctx):
         text="Powered by CodeNest System"
     )
 
-    await ctx.channel.send(
+    await ctx.respond(
         embed=embed,
         view=TicketView()
     )
 
+@bot.slash_command(name="jstock")
+async def jstock(ctx):
+
     await ctx.respond(
-        "✅ Setup completed.",
-        ephemeral=True
+        "💰 Stock Available"
     )
 
-
-# =========================
-# ENABLE / DISABLE KEYS
-# =========================
-
-@bot.slash_command(
-    name="jkeys",
-    description="Enable or disable keys"
-)
-async def jkeys(
-    ctx,
-    mode: discord.Option(
-        str,
-        choices=["enable", "disable"]
-    )
-):
-
-    if ctx.author.id != OWNER_ID:
-
-        await ctx.respond(
-            "❌ Only owner can use this command.",
-            ephemeral=True
-        )
-
-        return
-
-    settings = load_settings()
-
-    if mode == "enable":
-
-        settings["keys_enabled"] = True
-
-        save_settings(settings)
-
-        await ctx.respond(
-            "✅ Keys have been ENABLED."
-        )
-
-    else:
-
-        settings["keys_enabled"] = False
-
-        save_settings(settings)
-
-        await ctx.respond(
-            "✅ Keys have been DISABLED."
-        )
-
+# ================= START =================
 
 bot.run(TOKEN)
