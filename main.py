@@ -7,6 +7,7 @@ import discord
 
 from discord.ext import commands
 from dotenv import load_dotenv
+from urllib.parse import urlparse
 
 load_dotenv()
 
@@ -16,35 +17,44 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 SMM_API_KEY = os.getenv("SMM_API_KEY")
 OWNER_ID = int(os.getenv("OWNER_ID"))
 LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID"))
+USED_KEYS_WEBHOOK = os.getenv("USED_KEYS_WEBHOOK")
 
 API_URL = "https://cheapestsmmpanels.com/api/v2"
 
 # ================= CONFIG =================
 
-COOLDOWN_SECONDS = 1800
+# 5 minutes cooldown
+COOLDOWN_SECONDS = 300
 
 SERVICES = {
+
+    # ================= GET VIEWS =================
+
     "views": {
         "service_id": 3080,
-        "quantity": 100,
+        "quantity": 1000,
         "keys_file": "keys.txt",
         "button_label": "Get Views",
         "button_style": discord.ButtonStyle.primary
     },
 
+    # ================= KADDU1 =================
+
     "kaddu1": {
         "service_id": 3154,
         "quantity": 500,
         "keys_file": "kaddu1_keys.txt",
-        "button_label": "Get Likes",
+        "button_label": "Kaddu1",
         "button_style": discord.ButtonStyle.success
     },
+
+    # ================= KADDU2 =================
 
     "kaddu2": {
         "service_id": 3976,
         "quantity": 100,
         "keys_file": "kaddu2_keys.txt",
-        "button_label": "Get Followers",
+        "button_label": "Kaddu2",
         "button_style": discord.ButtonStyle.danger
     }
 }
@@ -64,15 +74,17 @@ bot = commands.Bot(
 # ================= SETTINGS =================
 
 def load_settings():
+
     if not os.path.exists(SETTINGS_FILE):
-        default = {
+
+        default_settings = {
             "keys_enabled": True
         }
 
         with open(SETTINGS_FILE, "w") as f:
-            json.dump(default, f, indent=4)
+            json.dump(default_settings, f, indent=4)
 
-        return default
+        return default_settings
 
     with open(SETTINGS_FILE, "r") as f:
         return json.load(f)
@@ -82,7 +94,9 @@ settings = load_settings()
 # ================= COOLDOWNS =================
 
 def load_cooldowns():
+
     if not os.path.exists(COOLDOWN_FILE):
+
         with open(COOLDOWN_FILE, "w") as f:
             json.dump({}, f)
 
@@ -92,10 +106,12 @@ def load_cooldowns():
 cooldowns = load_cooldowns()
 
 def save_cooldowns():
+
     with open(COOLDOWN_FILE, "w") as f:
         json.dump(cooldowns, f, indent=4)
 
 def check_cooldown(user_id):
+
     now = int(time.time())
 
     if user_id not in cooldowns:
@@ -109,12 +125,14 @@ def check_cooldown(user_id):
     return expire_time - now
 
 def update_cooldown(user_id):
+
     cooldowns[user_id] = int(time.time())
     save_cooldowns()
 
 # ================= KEYS =================
 
 def load_keys(file_name):
+
     if not os.path.exists(file_name):
         open(file_name, "w").close()
 
@@ -122,10 +140,13 @@ def load_keys(file_name):
         return [line.strip() for line in f.readlines() if line.strip()]
 
 def remove_key(file_name, used_key):
+
     keys = load_keys(file_name)
 
     with open(file_name, "w") as f:
+
         for key in keys:
+
             if key != used_key:
                 f.write(key + "\n")
 
@@ -142,11 +163,15 @@ class OrderModal(discord.ui.Modal):
             title=f"{self.service_data['button_label']} Order"
         )
 
+        # ================= LINK INPUT =================
+
         self.link = discord.ui.InputText(
             label="TikTok Video Link",
             placeholder="https://www.tiktok.com/...",
             required=True
         )
+
+        # ================= KEY INPUT =================
 
         self.key = discord.ui.InputText(
             label="Key",
@@ -163,16 +188,22 @@ class OrderModal(discord.ui.Modal):
 
         user_id = str(interaction.user.id)
 
+        # ================= COOLDOWN CHECK =================
+
         remaining = check_cooldown(user_id)
 
         if remaining > 0:
+
             mins = remaining // 60
             secs = remaining % 60
 
             return await interaction.response.send_message(
-                f"⏳ Cooldown active.\nTry again in {mins}m {secs}s",
+                f"⏳ Cooldown Active\n\n"
+                f"Try again in {mins}m {secs}s",
                 ephemeral=True
             )
+
+        # ================= GET VALUES =================
 
         link = self.link.value.strip()
         user_key = self.key.value.strip()
@@ -180,12 +211,17 @@ class OrderModal(discord.ui.Modal):
         # ================= URL VALIDATION =================
 
         if not validators.url(link):
+
             return await interaction.response.send_message(
                 "❌ Invalid URL",
                 ephemeral=True
             )
 
-        if "tiktok.com" not in link.lower():
+        parsed = urlparse(link)
+        domain = parsed.netloc.lower()
+
+        if "tiktok.com" not in domain:
+
             return await interaction.response.send_message(
                 "❌ Only TikTok links are allowed",
                 ephemeral=True
@@ -198,12 +234,13 @@ class OrderModal(discord.ui.Modal):
         valid_keys = load_keys(keys_file)
 
         if user_key not in valid_keys:
+
             return await interaction.response.send_message(
                 "❌ Invalid key for this service",
                 ephemeral=True
             )
 
-        # ================= API REQUEST =================
+        # ================= API PAYLOAD =================
 
         payload = {
             "key": SMM_API_KEY,
@@ -214,6 +251,8 @@ class OrderModal(discord.ui.Modal):
         }
 
         try:
+
+            # ================= SEND ORDER =================
 
             response = requests.post(
                 API_URL,
@@ -226,30 +265,53 @@ class OrderModal(discord.ui.Modal):
             # ================= API VALIDATION =================
 
             if "order" not in data:
+
                 return await interaction.response.send_message(
                     f"❌ API Error\n```{data}```",
                     ephemeral=True
                 )
 
-            # ================= REMOVE KEY =================
+            # ================= REMOVE USED KEY =================
 
             remove_key(keys_file, user_key)
+
+            # ================= USED KEYS WEBHOOK =================
+
+            try:
+
+                webhook_data = {
+                    "content":
+                    f"🔑 **Key Used**\n\n"
+                    f"👤 User: {interaction.user}\n"
+                    f"🆔 Discord ID: {interaction.user.id}\n"
+                    f"📦 Service: {self.service_type}\n"
+                    f"🔑 Key: `{user_key}`"
+                }
+
+                requests.post(
+                    USED_KEYS_WEBHOOK,
+                    json=webhook_data,
+                    timeout=10
+                )
+
+            except:
+                pass
 
             # ================= UPDATE COOLDOWN =================
 
             update_cooldown(user_id)
 
-            # ================= SUCCESS MESSAGE =================
+            # ================= SUCCESS RESPONSE =================
 
             await interaction.response.send_message(
-                f"✅ Order placed successfully!\n\n"
+                f"✅ Order Placed Successfully!\n\n"
                 f"📦 Service: {self.service_type}\n"
                 f"🔢 Quantity: {self.service_data['quantity']}\n"
                 f"🆔 Order ID: {data['order']}",
                 ephemeral=True
             )
 
-            # ================= LOGS =================
+            # ================= LOG CHANNEL =================
 
             log_channel = bot.get_channel(LOG_CHANNEL_ID)
 
@@ -267,7 +329,7 @@ class OrderModal(discord.ui.Modal):
                 )
 
                 embed.add_field(
-                    name="Button",
+                    name="Service",
                     value=self.service_type,
                     inline=True
                 )
@@ -301,7 +363,7 @@ class OrderModal(discord.ui.Modal):
         except Exception as e:
 
             await interaction.response.send_message(
-                f"❌ Error:\n```{e}```",
+                f"❌ Error\n```{e}```",
                 ephemeral=True
             )
 
@@ -312,32 +374,41 @@ class TicketView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
+    # ================= GET VIEWS BUTTON =================
+
     @discord.ui.button(
         label="Get Views",
         style=discord.ButtonStyle.primary,
         custom_id="views_button"
     )
     async def views_button(self, button, interaction):
+
         await interaction.response.send_modal(
             OrderModal("views")
         )
 
+    # ================= KADDU1 BUTTON =================
+
     @discord.ui.button(
-        label="TikTok Likes",
+        label="Kaddu1",
         style=discord.ButtonStyle.success,
         custom_id="kaddu1_button"
     )
     async def kaddu1_button(self, button, interaction):
+
         await interaction.response.send_modal(
             OrderModal("kaddu1")
         )
 
+    # ================= KADDU2 BUTTON =================
+
     @discord.ui.button(
-        label="TikTok Followers",
+        label="Kaddu2",
         style=discord.ButtonStyle.danger,
         custom_id="kaddu2_button"
     )
     async def kaddu2_button(self, button, interaction):
+
         await interaction.response.send_modal(
             OrderModal("kaddu2")
         )
@@ -351,20 +422,21 @@ async def on_ready():
 
     print(f"Logged in as {bot.user}")
 
-# ================= COMMANDS =================
+# ================= SETUP COMMAND =================
 
 @bot.slash_command(name="jsetup")
 async def jsetup(ctx):
 
     if ctx.author.id != OWNER_ID:
+
         return await ctx.respond(
-            "❌ Owner only command",
+            "❌ Owner Only Command",
             ephemeral=True
         )
 
     embed = discord.Embed(
         title="TikTok Views Tool",
-        description="Click the buttons below to get TikTok Services",
+        description="Click the buttons below to get TikTok Views",
         color=discord.Color.green()
     )
 
@@ -377,13 +449,40 @@ async def jsetup(ctx):
         view=TicketView()
     )
 
+# ================= STOCK COMMAND =================
+
 @bot.slash_command(name="jstock")
 async def jstock(ctx):
 
-    await ctx.respond(
-        "💰 Stock Available"
+    views_stock = len(load_keys("keys.txt"))
+    kaddu1_stock = len(load_keys("kaddu1_keys.txt"))
+    kaddu2_stock = len(load_keys("kaddu2_keys.txt"))
+
+    embed = discord.Embed(
+        title="📦 Current Stock",
+        color=discord.Color.blurple()
     )
 
-# ================= START =================
+    embed.add_field(
+        name="Get Views",
+        value=f"{views_stock} Keys",
+        inline=False
+    )
+
+    embed.add_field(
+        name="Kaddu1",
+        value=f"{kaddu1_stock} Keys",
+        inline=False
+    )
+
+    embed.add_field(
+        name="Kaddu2",
+        value=f"{kaddu2_stock} Keys",
+        inline=False
+    )
+
+    await ctx.respond(embed=embed)
+
+# ================= START BOT =================
 
 bot.run(TOKEN)
