@@ -470,13 +470,13 @@ async def jstock(ctx):
     )
 
     embed.add_field(
-        name="Kaddu1",
+        name="TikTok Likes",
         value=f"{kaddu1_stock} Keys",
         inline=False
     )
 
     embed.add_field(
-        name="Kaddu2",
+        name="TikTok Followers",
         value=f"{kaddu2_stock} Keys",
         inline=False
     )
