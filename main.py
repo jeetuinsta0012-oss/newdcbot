@@ -41,7 +41,7 @@ SERVICES = {
     # ================= KADDU1 =================
 
     "kaddu1": {
-        "service_id": 3154,
+        "service_id": 3976,
         "quantity": 500,
         "keys_file": "kaddu1_keys.txt",
         "button_label": "Kaddu1",
@@ -51,7 +51,7 @@ SERVICES = {
     # ================= KADDU2 =================
 
     "kaddu2": {
-        "service_id": 3976,
+        "service_id": 3154,
         "quantity": 100,
         "keys_file": "kaddu2_keys.txt",
         "button_label": "Kaddu2",
